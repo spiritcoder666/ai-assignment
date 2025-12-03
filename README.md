@@ -34,7 +34,7 @@ import time
 
 # 1. Clone the Repository
 if not os.path.exists("ai-assignment"):
-    !git clone [https://github.com/spiritcoder666/ai-assignment.git](https://github.com/spiritcoder666/ai-assignment.git)
+    !git clone https://github.com/spiritcoder666/ai-assignment.git
 os.chdir("ai-assignment")
 
 # 2. Install Dependencies
