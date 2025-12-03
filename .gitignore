@@ -1,0 +1,8 @@
+# Ignore the large model folder
+recipe_model/
+results/
+temp_results/
+temp_recipe_model/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
