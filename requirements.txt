@@ -1,16 +1,16 @@
-streamlit==1.28.0
-pandas==2.0.3
-numpy==1.24.3
-fuzzywuzzy==0.18.0
-python-Levenshtein==0.21.1
-faiss-cpu==1.7.4
-sentence-transformers==2.2.2
-# NEW Dependencies for Task 2
-torch==2.1.0
-transformers==4.35.0
-accelerate==0.24.0
-datasets==2.14.0
-fastapi==0.104.0
-uvicorn==0.24.0
-python-multipart==0.0.6
-requests==2.31.0
+streamlit
+pandas
+numpy
+fuzzywuzzy
+faiss-cpu
+sentence-transformers
+# Dependencies for the AI model
+# We remove specific versions to prevent conflicts on the cloud
+torch
+transformers
+accelerate
+datasets
+fastapi
+uvicorn
+python-multipart
+requests
