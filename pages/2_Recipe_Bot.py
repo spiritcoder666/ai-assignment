@@ -1,9 +1,6 @@
 import streamlit as st
 import requests
 
-import streamlit as st
-import requests
-
 # Add this cleaning function here
 def clean_recipe_output(text):
     """Clean up the generated recipe text"""
