@@ -1,8 +1,13 @@
 import os
-import shutil
-from transformers import GPT2Tokenizer, GPT2LMHeadModel, TextDataset, DataCollatorForLanguageModeling, Trainer, TrainingArguments
+from transformers import (
+    GPT2Tokenizer, 
+    GPT2LMHeadModel, 
+    Trainer, 
+    TrainingArguments,
+    DataCollatorForLanguageModeling
+)
+from datasets import Dataset
 
-# 1. Create Dummy Data
 # 1. Create Better Training Data
 base_data = [
     "Ingredients: Egg, Onion, Oil. Recipe: Heat oil in a pan, fry chopped onions until golden, add beaten eggs and scramble until cooked.",
@@ -22,56 +27,95 @@ base_data = [
     "Ingredients: Milk, Sugar. Recipe: Heat milk gently, stir in sugar until dissolved, serve warm or chilled as a sweet drink.",
 ]
 
-# Expand dataset - repeat 30 times for better training
-data = base_data * 30
-with open("recipes.txt", "w") as f:
+# Expand dataset - repeat 40 times for better training
+data = base_data * 40
+
+# Write to file
+print("📝 Creating training data file...")
+with open("recipes.txt", "w", encoding="utf-8") as f:
     f.write("\n".join(data))
 
-# 2. Load Model
+print(f"✅ Created {len(data)} training examples")
+
+# 2. Load Model and Tokenizer
+print("🤖 Loading model...")
 model_name = "distilgpt2"
 tokenizer = GPT2Tokenizer.from_pretrained(model_name)
 model = GPT2LMHeadModel.from_pretrained(model_name)
 
+# Set pad token
 tokenizer.pad_token = tokenizer.eos_token
+model.config.pad_token_id = tokenizer.pad_token_id
 
-# 3. Prepare Dataset
-train_dataset = TextDataset(
-    tokenizer=tokenizer,
-    file_path="recipes.txt",
-    block_size=128
+# 3. Prepare Dataset using the new method (not deprecated TextDataset)
+print("📊 Preparing dataset...")
+
+def tokenize_function(examples):
+    # Tokenize the text
+    result = tokenizer(
+        examples["text"],
+        truncation=True,
+        max_length=128,
+        padding="max_length",
+        return_tensors=None
+    )
+    # Clone input_ids to labels for language modeling
+    result["labels"] = result["input_ids"].copy()
+    return result
+
+# Read the file and create dataset
+with open("recipes.txt", "r", encoding="utf-8") as f:
+    texts = [line.strip() for line in f if line.strip()]
+
+# Create a dataset from the texts
+dataset = Dataset.from_dict({"text": texts})
+
+# Tokenize the dataset
+tokenized_dataset = dataset.map(
+    tokenize_function,
+    batched=True,
+    remove_columns=["text"]
 )
-data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
-# 4. Train
-# WE SAVE TO /content/temp_model (Local VM) to avoid Drive lag
+print(f"✅ Dataset prepared with {len(tokenized_dataset)} samples")
+
+# 4. Data Collator
+data_collator = DataCollatorForLanguageModeling(
+    tokenizer=tokenizer, 
+    mlm=False
+)
+
+# 5. Training Arguments
 training_args = TrainingArguments(
-    output_dir="/content/temp_results", 
+    output_dir="./temp_results",
     overwrite_output_dir=True,
     num_train_epochs=3,
     per_device_train_batch_size=4,
-    save_steps=500, # Don't save intermediate steps to drive
+    save_steps=500,
+    save_total_limit=2,
+    logging_steps=10,
+    learning_rate=5e-5,
+    warmup_steps=100,
+    weight_decay=0.01,
 )
 
+# 6. Initialize Trainer
 trainer = Trainer(
     model=model,
     args=training_args,
     data_collator=data_collator,
-    train_dataset=train_dataset,
+    train_dataset=tokenized_dataset,
 )
 
+# 7. Train
 print("🚀 Starting Fine-Tuning...")
 trainer.train()
 
-# 5. Save Locally First (Fast)
-print("💾 Saving model locally...")
-model.save_pretrained("/content/temp_recipe_model")
-tokenizer.save_pretrained("/content/temp_recipe_model")
-
-# 6. Move to Drive (Explicit copy)
-print("📂 Moving to Google Drive folder...")
+# 8. Save Model
+print("💾 Saving model...")
 target_dir = "./recipe_model"
-if os.path.exists(target_dir):
-    shutil.rmtree(target_dir)
-shutil.copytree("/content/temp_recipe_model", target_dir)
 
-print("✅ DONE! Model is ready.")
+model.save_pretrained(target_dir)
+tokenizer.save_pretrained(target_dir)
+
+print(f"✅ DONE! Model is ready at: {target_dir}")
