@@ -8,98 +8,75 @@ from transformers import (
 )
 from datasets import Dataset
 
-# 1. Create Better Training Data
+# 1. MINIMAL Training Data (just enough to learn the pattern)
 base_data = [
-    "Ingredients: Egg, Onion, Oil. Recipe: Heat oil in a pan, fry chopped onions until golden, add beaten eggs and scramble until cooked.",
-    "Ingredients: Egg, Onion. Recipe: Whisk eggs with salt, cook diced onions in butter, pour eggs over onions and scramble gently.",
-    "Ingredients: Rice, Tomato, Salt. Recipe: Cook rice in salted water, add chopped tomatoes and simmer until rice is tender and fluffy.",
-    "Ingredients: Rice, Tomato. Recipe: Boil rice until half done, stir in tomato paste and cook covered until rice absorbs all flavors.",
-    "Ingredients: Milk, Sugar, Tea. Recipe: Boil milk in a pot, add tea leaves and sugar, simmer for 5 minutes and strain into cups.",
-    "Ingredients: Milk, Tea. Recipe: Brew strong tea in boiling water, add hot milk and sweeten to taste with sugar or honey.",
-    "Ingredients: Bread, Butter. Recipe: Toast bread slices until golden brown, spread softened butter evenly while still warm.",
-    "Ingredients: Bread. Recipe: Slice bread and toast in a toaster or pan until crispy and lightly browned on both sides.",
-    "Ingredients: Chicken, Spice, Oil. Recipe: Marinate chicken pieces in mixed spices, heat oil and fry until golden and cooked through.",
-    "Ingredients: Chicken, Spice. Recipe: Rub chicken with spice blend, bake at 180C for 40 minutes until tender and juicy.",
-    "Ingredients: Egg, Oil. Recipe: Heat oil in a pan, crack eggs directly into hot oil and fry until whites are set and yolks are runny.",
-    "Ingredients: Onion, Oil. Recipe: Slice onions thinly, fry in hot oil until caramelized and deep golden brown in color.",
-    "Ingredients: Rice, Salt. Recipe: Rinse rice thoroughly, cook in salted boiling water until grains are separate and fluffy.",
-    "Ingredients: Chicken, Oil. Recipe: Cut chicken into pieces, shallow fry in hot oil until skin is crispy and meat is cooked.",
-    "Ingredients: Milk, Sugar. Recipe: Heat milk gently, stir in sugar until dissolved, serve warm or chilled as a sweet drink.",
+    "Ingredients: Egg, Onion, Oil. Recipe: Heat oil, fry onions, add eggs and scramble.",
+    "Ingredients: Egg, Onion. Recipe: Cook onions in butter, pour eggs and scramble.",
+    "Ingredients: Rice, Tomato, Salt. Recipe: Cook rice with chopped tomatoes and salt.",
+    "Ingredients: Rice, Tomato. Recipe: Boil rice, add tomato paste and simmer.",
+    "Ingredients: Milk, Sugar, Tea. Recipe: Boil milk, add tea leaves and sugar.",
+    "Ingredients: Bread, Butter. Recipe: Toast bread and spread butter evenly.",
+    "Ingredients: Chicken, Spice, Oil. Recipe: Fry chicken in oil with mixed spices.",
 ]
 
-# Expand dataset - repeat 40 times for better training
-data = base_data * 40
+# Only repeat 15 times (instead of 40) = 105 samples total
+data = base_data * 15
 
 # Write to file
-print("📝 Creating training data file...")
+print("📝 Creating training data...")
 with open("recipes.txt", "w", encoding="utf-8") as f:
     f.write("\n".join(data))
 
 print(f"✅ Created {len(data)} training examples")
 
-# 2. Load Model and Tokenizer
+# 2. Load Model
 print("🤖 Loading model...")
-model_name = "distilgpt2"
-tokenizer = GPT2Tokenizer.from_pretrained(model_name)
-model = GPT2LMHeadModel.from_pretrained(model_name)
+tokenizer = GPT2Tokenizer.from_pretrained("distilgpt2")
+model = GPT2LMHeadModel.from_pretrained("distilgpt2")
 
-# Set pad token
 tokenizer.pad_token = tokenizer.eos_token
 model.config.pad_token_id = tokenizer.pad_token_id
 
-# 3. Prepare Dataset using the new method (not deprecated TextDataset)
+# 3. Prepare Dataset
 print("📊 Preparing dataset...")
 
 def tokenize_function(examples):
-    # Tokenize the text
     result = tokenizer(
         examples["text"],
         truncation=True,
-        max_length=128,
+        max_length=64,  # Reduced from 128 to 64
         padding="max_length",
-        return_tensors=None
     )
-    # Clone input_ids to labels for language modeling
     result["labels"] = result["input_ids"].copy()
     return result
 
-# Read the file and create dataset
 with open("recipes.txt", "r", encoding="utf-8") as f:
     texts = [line.strip() for line in f if line.strip()]
 
-# Create a dataset from the texts
 dataset = Dataset.from_dict({"text": texts})
+tokenized_dataset = dataset.map(tokenize_function, batched=True, remove_columns=["text"])
 
-# Tokenize the dataset
-tokenized_dataset = dataset.map(
-    tokenize_function,
-    batched=True,
-    remove_columns=["text"]
-)
-
-print(f"✅ Dataset prepared with {len(tokenized_dataset)} samples")
+print(f"✅ Dataset ready: {len(tokenized_dataset)} samples")
 
 # 4. Data Collator
-data_collator = DataCollatorForLanguageModeling(
-    tokenizer=tokenizer, 
-    mlm=False
-)
+data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
-# 5. Training Arguments
+# 5. ULTRA-LIGHT Training Config
 training_args = TrainingArguments(
     output_dir="./temp_results",
     overwrite_output_dir=True,
-    num_train_epochs=3,
-    per_device_train_batch_size=4,
-    save_steps=500,
-    save_total_limit=2,
-    logging_steps=10,
+    num_train_epochs=2,              # Only 2 epochs (was 3)
+    per_device_train_batch_size=8,   # Larger batches = faster (was 4)
+    save_steps=1000,                 # Save less often
+    save_total_limit=1,              # Keep only 1 checkpoint
+    logging_steps=50,                # Log less often
     learning_rate=5e-5,
-    warmup_steps=100,
-    weight_decay=0.01,
+    warmup_steps=50,                 # Reduced warmup
+    fp16=False,                      # Disable mixed precision (can cause issues)
+    dataloader_num_workers=0,        # No parallel workers
 )
 
-# 6. Initialize Trainer
+# 6. Trainer
 trainer = Trainer(
     model=model,
     args=training_args,
@@ -108,14 +85,12 @@ trainer = Trainer(
 )
 
 # 7. Train
-print("🚀 Starting Fine-Tuning...")
+print("🚀 Starting Fast Training (2-3 minutes)...")
 trainer.train()
 
-# 8. Save Model
+# 8. Save
 print("💾 Saving model...")
-target_dir = "./recipe_model"
+model.save_pretrained("./recipe_model")
+tokenizer.save_pretrained("./recipe_model")
 
-model.save_pretrained(target_dir)
-tokenizer.save_pretrained(target_dir)
-
-print(f"✅ DONE! Model is ready at: {target_dir}")
+print("✅ DONE! Model ready at: ./recipe_model")
