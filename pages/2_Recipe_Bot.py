@@ -23,7 +23,7 @@ if st.button("🤖 Generate Recipe"):
                 response = requests.post(
                     "http://127.0.0.1:8000/generate_recipe",
                     json={"ingredients": ingredients},
-                    timeout=2  # Fail fast if server isn't there
+                    timeout=30  # Fail fast if server isn't there
                 )
                 
                 if response.status_code == 200:
